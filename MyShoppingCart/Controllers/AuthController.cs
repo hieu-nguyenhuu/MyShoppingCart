@@ -33,10 +33,12 @@ namespace MyShoppingCart.Controllers
                 return BadRequest("Login failed");
             return Ok(token);
         }
-        [HttpGet("EmailConfirm")]
-        public async Task<IActionResult> EmailConfirm(string token)
-        {
-
-        }
+        //[HttpGet("RegisterConfirm")]
+        //public async Task<IActionResult> RegisterConfirm(string token)
+        //{
+        //    if (await _authService.RegisterConfirmAsync(token))
+        //        return Ok("Confirmed successfully");
+        //    return BadRequest("Not yet confirmed");
+        //}
     }
 }

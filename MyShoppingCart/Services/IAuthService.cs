@@ -8,5 +8,6 @@ namespace MyShoppingCart.Services
         Task<bool> RegisterUserAsync(UserRegister userRegister);
         Task<bool> LoginAsync(UserLogin userLogin);
         Task<string?> GenerateTokenStringAsync(UserLogin userLogin);
+        //Task<bool> RegisterConfirmAsync(string token);
     }
 }
