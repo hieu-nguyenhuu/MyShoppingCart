@@ -6,7 +6,10 @@ using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using MyShoppingCart.Models;
+using MyShoppingCart.Repository;
+using System.Buffers.Text;
 using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -20,22 +23,23 @@ namespace MyShoppingCart.Services
         private readonly SignInManager<IdentityUser> _signInManager;
         private readonly IConfiguration _configuration;
         private readonly IEmailSender _emailSender;
-        //private readonly UserStore<IdentityUser> _userStore;
+        public IRepository<IdentityUser> _repository;
+
 
         public AuthService
         (
             UserManager<IdentityUser> userManager, 
             SignInManager<IdentityUser> signInManager, 
             IConfiguration configuration, 
-            IEmailSender emailSender 
-            //UserStore<IdentityUser> userStore
+            IEmailSender emailSender,
+            IRepository<IdentityUser> repository
         )
         {
             _userManager = userManager;
             _signInManager = signInManager;
             _configuration = configuration;
             _emailSender = emailSender;
-            //_userStore = userStore;
+            _repository = repository;
         }
         public async Task<bool> RegisterUserAsync(UserRegister userRegister)
         {
@@ -59,15 +63,15 @@ namespace MyShoppingCart.Services
             {
                 Subject = new ClaimsIdentity(claims),
                 Expires = DateTime.UtcNow.AddMinutes(5),
-                Issuer = _configuration.GetSection("Jwt:Issuer").Value,
-                Audience = _configuration.GetSection("Jwt:Issuer").Value,
+                //Issuer = _configuration.GetSection("Jwt:Issuer").Value,
+                //Audience = _configuration.GetSection("Jwt:Issuer").Value,
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
             };
 
             var token = tokenHandler.CreateToken(tokenDescriptor);
             var tokenString = tokenHandler.WriteToken(token);
             string emailSubject = "Confirm your registration";
-            string httpMessage = $"Please confirm your account by <a href='https://localhost:7046/api/RegisterConfirm?token={tokenString}'>clicking here</a>.";
+            string httpMessage = $"Please confirm your account by <a href='https://localhost:7046/api/Auth/RegisterConfirm?token={tokenString}'>clicking here</a>.";
             await _emailSender.SendEmailAsync(identityUser.Email, emailSubject, httpMessage);
             
             return result.Succeeded;
@@ -79,10 +83,15 @@ namespace MyShoppingCart.Services
             {
                 return false;
             }
-            else if (!await _userManager.CheckPasswordAsync(identityUser, userLogin.Password))
+            if (!await _userManager.CheckPasswordAsync(identityUser, userLogin.Password))
             {
                 return false;
             }
+            if(identityUser.EmailConfirmed == false) 
+            {
+                return false;
+            }
+
             await _signInManager.SignInAsync(identityUser, false);
             return true;
         }
@@ -94,6 +103,9 @@ namespace MyShoppingCart.Services
             {
                 return null;
             }
+            if (identityUser.EmailConfirmed == false)
+                return null;
+
             var claims = new List<Claim>
                 {
                     new Claim(ClaimTypes.Name, identityUser.UserName),
@@ -117,31 +129,72 @@ namespace MyShoppingCart.Services
             return tokenString;
         }
 
-        //public async Task<bool> RegisterConfirmAsync(string token)
-        //{
-        //    string[] tokenSplit = token.Split('.');
-        //    string encodedBody = tokenSplit[0] + "."+ tokenSplit[1];
-        //    string signature = tokenSplit[2];
-        //    string newSignature = "";
-        //    byte[] key = Encoding.UTF8.GetBytes(_configuration.GetSection("Jwt:Key").Value);
-        //    using (HMACSHA256 hmac = new HMACSHA256(key))
-        //    {
-        //        byte[] signatureBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(encodedBody));
-        //        newSignature = Encoding.UTF8.GetString(signatureBytes);
-        //    }
-        //    if(newSignature != signature)
-        //    {
-        //        return false;
-        //    }
-        //    var handler = new JwtSecurityTokenHandler();
-        //    var jwtToken = handler.ReadJwtToken(token);
-        //    var identityUser = await _userManager.FindByEmailAsync(jwtToken.Claims.First(c => c.Type == "email").Value);
-        //    if(identityUser == null) 
-        //    {
-        //        return false;
-        //    }
-        //    await _userStore.SetEmailConfirmedAsync(identityUser, true);
-        //    return true;
-        //}
+        public async Task<bool> RegisterConfirmAsync(string token)
+        {
+            string[] tokenSplit = token.Split('.');
+            string payload = tokenSplit[1];
+            string encodedBody = tokenSplit[0] + "." + tokenSplit[1];
+            string signature = tokenSplit[2];
+            string newSignature = "";
+            byte[] key = Encoding.UTF8.GetBytes(_configuration.GetSection("Jwt:Key").Value);
+            using (HMACSHA256 hmac = new HMACSHA256(key))
+            {
+                byte[] signatureBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(encodedBody));
+                newSignature = Base64UrlEncoder.Encode(signatureBytes);
+            }
+            if (newSignature != signature)
+            {
+                return false;
+            }
+            var handler = new JwtSecurityTokenHandler();
+            var jwtToken = handler.ReadJwtToken(token);
+            
+            var expTimestamp = Convert.ToInt64(jwtToken.Claims.First(c => c.Type == "exp").Value);
+            DateTimeOffset currentDateTimeOffset = DateTimeOffset.UtcNow;
+            long currentTimestamp = currentDateTimeOffset.ToUnixTimeSeconds();
+            bool isPastTime = expTimestamp < currentTimestamp;
+            if(isPastTime)
+            {
+                return false;
+            }
+
+            var identityUser = await _userManager.FindByEmailAsync(jwtToken.Claims.First(c => c.Type == "email").Value);
+            if (identityUser == null)
+            {
+                return false;
+            }
+
+            identityUser.EmailConfirmed = true;
+            await _repository.UpdateAsync(identityUser);
+            return true;
+            //// Assuming you have the JWT string
+            //string jwtToken = "your_jwt_token_here";
+
+            //// Parse the JWT payload
+            //var tokenValidationParameters = new TokenValidationParameters
+            //{
+            //    ValidateIssuerSigningKey = true, // Set this to true if you need to validate signature
+            //                                     // Other validation parameters as needed (issuer, audience, etc.)
+            //};
+
+            //var tokenHandler = new JwtSecurityTokenHandler();
+            //SecurityToken validatedToken;
+            //var principal = tokenHandler.ValidateToken(jwtToken, tokenValidationParameters, out validatedToken);
+
+            //// Accessing claims
+            //var payload = validatedToken as JwtSecurityToken;
+            //if (payload != null)
+            //{
+            //    IDictionary<string, object> claims = payload.Claims.ToDictionary(claim => claim.Type, claim => claim.Value);
+
+            //    // Access specific claims by key
+            //    string username = claims["sub"]?.ToString();
+            //    string role = claims["role"]?.ToString();
+
+            //    Console.WriteLine($"Username: {username}");
+            //    Console.WriteLine($"Role: {role}");
+            //}
+
+        }
     }
 }

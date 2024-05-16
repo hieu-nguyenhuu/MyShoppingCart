@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using MyShoppingCart.Models;
+using MyShoppingCart.Repository;
 using MyShoppingCart.Services;
 using System.Text;
 
@@ -46,7 +47,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 builder.Services.AddControllers();
 builder.Services.AddTransient<IAuthService, AuthService>();
 builder.Services.AddTransient<IEmailSender, EmailSender>();
-//builder.Services.AddTransient<UserStore<IdentityUser>>();
+builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

@@ -25,20 +25,20 @@ namespace MyShoppingCart.Controllers
         [HttpPost("Login")]
         public async Task<IActionResult> LoginAsync(UserLogin userLogin)
         {
-            //if (await _authService.LoginAsync(userLogin))
-            //    return Ok("Login Successfully");
-            //return BadRequest("Login failed");
-            var token = await _authService.GenerateTokenStringAsync(userLogin);
-            if (token == null)
-                return BadRequest("Login failed");
-            return Ok(token);
+            if (await _authService.LoginAsync(userLogin))
+                return Ok("Login Successfully");
+            return BadRequest("Login failed");
+            //var token = await _authService.GenerateTokenStringAsync(userLogin);
+            //if (token == null)
+            //    return BadRequest("Login failed");
+            //return Ok(token);
         }
-        //[HttpGet("RegisterConfirm")]
-        //public async Task<IActionResult> RegisterConfirm(string token)
-        //{
-        //    if (await _authService.RegisterConfirmAsync(token))
-        //        return Ok("Confirmed successfully");
-        //    return BadRequest("Not yet confirmed");
-        //}
+        [HttpGet("RegisterConfirm")]
+        public async Task<IActionResult> RegisterConfirm(string token)
+        {
+            if (await _authService.RegisterConfirmAsync(token))
+                return Ok("Confirmed successfully");
+            return BadRequest("Not yet confirmed");
+        }
     }
 }

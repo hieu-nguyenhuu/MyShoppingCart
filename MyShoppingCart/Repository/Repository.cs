@@ -1,4 +1,5 @@
-﻿using MyShoppingCart.Models;
+﻿using Microsoft.EntityFrameworkCore;
+using MyShoppingCart.Models;
 using NuGet.Packaging.Core;
 
 namespace MyShoppingCart.Repository
@@ -11,29 +12,37 @@ namespace MyShoppingCart.Repository
         {
             _dbContext = dbContext;
         }
-        public Task AddAsync(T entity)
+        public async Task AddAsync(T entity)
         {
-            throw new NotImplementedException();
+            await _dbContext.AddAsync(entity);
+            await _dbContext.SaveChangesAsync();
         }
 
-        public Task DeleteAsync(int id)
+        public async Task DeleteAsync(int id)
         {
-            throw new NotImplementedException();
+            var entity = await _dbContext.FindAsync<T>(id);
+            if (entity == null)
+            {
+                return;
+            }
+            _dbContext.Remove<T>(entity);
+            await _dbContext.SaveChangesAsync();
         }
 
-        public Task<IEnumerable<T>> GetAllAsync()
+        public async Task<IEnumerable<T>> GetAllAsync()
         {
-            throw new NotImplementedException();
+            return await _dbContext.Set<T>().ToListAsync();
         }
 
-        public Task<T> GetByIdAsync(int id)
+        public async Task<T?> GetByIdAsync(int id)
         {
-            throw new NotImplementedException();
+            return await _dbContext.FindAsync<T>(id);
         }
 
-        public Task UpdateAsync(T entity)
+        public async Task UpdateAsync(T entity)
         {
-            throw new NotImplementedException();
+            _dbContext.Update<T>(entity);
+            await _dbContext.SaveChangesAsync();
         }
     }
 }
