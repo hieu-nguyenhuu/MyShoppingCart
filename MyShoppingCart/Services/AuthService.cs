@@ -51,6 +51,10 @@ namespace MyShoppingCart.Services
                 EmailConfirmed = false
             };
             var result = await _userManager.CreateAsync(identityUser, userRegister.Password);
+            if(!result.Succeeded)
+            {
+                return false;
+            }
             var claims = new List<Claim>
                 {
                     new Claim(ClaimTypes.Name, identityUser.UserName),
@@ -63,8 +67,6 @@ namespace MyShoppingCart.Services
             {
                 Subject = new ClaimsIdentity(claims),
                 Expires = DateTime.UtcNow.AddMinutes(5),
-                //Issuer = _configuration.GetSection("Jwt:Issuer").Value,
-                //Audience = _configuration.GetSection("Jwt:Issuer").Value,
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
             };
 
@@ -74,26 +76,34 @@ namespace MyShoppingCart.Services
             string httpMessage = $"Please confirm your account by <a href='https://localhost:7046/api/Auth/RegisterConfirm?token={tokenString}'>clicking here</a>.";
             await _emailSender.SendEmailAsync(identityUser.Email, emailSubject, httpMessage);
             
-            return result.Succeeded;
+            return true;
         }
         public async Task<bool> LoginAsync(UserLogin userLogin)
         {
-            var identityUser = await _userManager.FindByEmailAsync(userLogin.Email);
-            if(identityUser == null)
-            {
-                return false;
-            }
-            if (!await _userManager.CheckPasswordAsync(identityUser, userLogin.Password))
-            {
-                return false;
-            }
-            if(identityUser.EmailConfirmed == false) 
+            //var identityUser = await _userManager.FindByEmailAsync(userLogin.Email);
+            //if(identityUser == null)
+            //{
+            //    return false;
+            //}
+            //if (!await _userManager.CheckPasswordAsync(identityUser, userLogin.Password))
+            //{
+            //    return false;
+            //}
+            //if(identityUser.EmailConfirmed == false) 
+            //{
+            //    return false;
+            //}
+
+            //await _signInManager.SignInAsync(identityUser, false);
+            //return true;
+            var user = await _userManager.FindByEmailAsync(userLogin.Email);
+            if (user == null)
             {
                 return false;
             }
 
-            await _signInManager.SignInAsync(identityUser, false);
-            return true;
+            var result = await _signInManager.PasswordSignInAsync(user, userLogin.Password, isPersistent:false, lockoutOnFailure: false);
+            return result.Succeeded;
         }
 
         public async Task<string?> GenerateTokenStringAsync(UserLogin userLogin)
@@ -167,33 +177,18 @@ namespace MyShoppingCart.Services
             identityUser.EmailConfirmed = true;
             await _repository.UpdateAsync(identityUser);
             return true;
-            //// Assuming you have the JWT string
-            //string jwtToken = "your_jwt_token_here";
 
-            //// Parse the JWT payload
-            //var tokenValidationParameters = new TokenValidationParameters
-            //{
-            //    ValidateIssuerSigningKey = true, // Set this to true if you need to validate signature
-            //                                     // Other validation parameters as needed (issuer, audience, etc.)
-            //};
+            var tokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateLifetime = true,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration.GetSection("Jwt:Key").Value))
+            };
 
-            //var tokenHandler = new JwtSecurityTokenHandler();
-            //SecurityToken validatedToken;
-            //var principal = tokenHandler.ValidateToken(jwtToken, tokenValidationParameters, out validatedToken);
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out var validatedToken);
 
-            //// Accessing claims
-            //var payload = validatedToken as JwtSecurityToken;
-            //if (payload != null)
-            //{
-            //    IDictionary<string, object> claims = payload.Claims.ToDictionary(claim => claim.Type, claim => claim.Value);
-
-            //    // Access specific claims by key
-            //    string username = claims["sub"]?.ToString();
-            //    string role = claims["role"]?.ToString();
-
-            //    Console.WriteLine($"Username: {username}");
-            //    Console.WriteLine($"Role: {role}");
-            //}
+            var payloadProperties = validatedToken as JwtSecurityToken;
+            
 
         }
     }
